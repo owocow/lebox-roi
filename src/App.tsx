@@ -44,9 +44,14 @@ interface ROIParams {
   v: number; // 期末残值 (单台)
   c: number; // 柜体成本
   n: number; // 每个柜体可存放设备数量
+  k: number; // 柜体数量 (批量投入)
   r: number; // 资金成本 (年化 %)
   u: number; // 设备出勤率 (%)
   o: number; // 月运营杂费 (电费、场地、人工)
+  f: number; // 支付手续费率 (%)
+  l: number; // 风险损耗率 (%)
+  y: number; // 预期设备寿命 (月)
+  tax: number; // 综合税率 (%)
 }
 
 export default function App() {
@@ -58,46 +63,62 @@ export default function App() {
     v: 1500,
     c: 11000,
     n: 13,
+    k: 1,
     r: 5,
     u: 60,
-    o: 500
+    o: 500,
+    f: 1,
+    l: 3,
+    y: 24,
+    tax: 6
   });
 
   const results = useMemo(() => {
-    const { mode, d, p, t, v, c, n, r, u, o } = params;
+    const { mode, d, p, t, v, c, n, k, r, u, o, f, l, y, tax } = params;
     
-    const activeDevices = n * (u / 100);
-    const monthlyRevenue = p * t * activeDevices * 30;
+    const totalDevices = n * k;
+    const activeDevices = totalDevices * (u / 100);
+    const grossMonthlyRevenue = p * t * activeDevices * 30;
 
+    // Advanced Deductions
+    const paymentFees = grossMonthlyRevenue * (f / 100);
+    const riskLoss = grossMonthlyRevenue * (l / 100);
+    
     let totalInitialInvestment = 0;
     let totalResidualValue = 0;
     let monthlyOperatingCost = 0;
     let monthlyInterestCost = 0;
 
     if (mode === 'buy') {
-      const totalDeviceCost = d * n;
-      totalInitialInvestment = c + totalDeviceCost;
-      totalResidualValue = v * n;
+      const totalDeviceCost = d * totalDevices;
+      totalInitialInvestment = (c * k) + totalDeviceCost;
+      totalResidualValue = v * totalDevices;
       monthlyInterestCost = totalInitialInvestment * (r / 100) / 12;
-      monthlyOperatingCost = monthlyInterestCost + o;
+      monthlyOperatingCost = monthlyInterestCost + (o * k);
     } else {
-      totalInitialInvestment = c;
+      totalInitialInvestment = c * k;
       totalResidualValue = 0;
-      monthlyInterestCost = c * (r / 100) / 12;
-      const monthlyDeviceRent = d * n;
-      monthlyOperatingCost = monthlyInterestCost + monthlyDeviceRent + o;
+      monthlyInterestCost = totalInitialInvestment * (r / 100) / 12;
+      const monthlyDeviceRent = d * totalDevices;
+      monthlyOperatingCost = monthlyInterestCost + monthlyDeviceRent + (o * k);
     }
+
+    // Tax calculation (simplified: on revenue after direct operating costs)
+    const taxableIncome = Math.max(0, grossMonthlyRevenue - paymentFees - riskLoss - monthlyOperatingCost);
+    const monthlyTax = taxableIncome * (tax / 100);
+    
+    const totalMonthlyDeductions = paymentFees + riskLoss + monthlyOperatingCost + monthlyTax;
+    const netMonthlyRevenue = grossMonthlyRevenue - totalMonthlyDeductions;
     
     const netInvestment = totalInitialInvestment - totalResidualValue;
-    const netMonthlyRevenue = monthlyRevenue - monthlyOperatingCost;
     
     // Payback period in months
     const m = netMonthlyRevenue > 0 ? netInvestment / netMonthlyRevenue : Infinity;
     
     // Generate chart data for 24 months
     const chartData = Array.from({ length: 25 }, (_, i) => {
-      const revenue = monthlyRevenue * i;
-      const cost = monthlyOperatingCost * i;
+      const revenue = grossMonthlyRevenue * i;
+      const cost = totalMonthlyDeductions * i;
       const netProfit = revenue - cost - (totalInitialInvestment - (i >= m ? totalResidualValue : 0));
       return {
         month: i,
@@ -109,13 +130,18 @@ export default function App() {
 
     return {
       totalInitialInvestment,
-      totalDeviceCost: mode === 'buy' ? d * n : 0,
+      totalDeviceCost: mode === 'buy' ? d * totalDevices : 0,
       totalResidualValue,
-      monthlyRevenue,
+      monthlyRevenue: grossMonthlyRevenue,
+      netMonthlyRevenue,
+      paymentFees,
+      riskLoss,
+      monthlyTax,
       monthlyInterestCost,
-      monthlyDeviceRent: mode === 'rent' ? d * n : 0,
-      monthlyOperatingCost,
+      monthlyDeviceRent: mode === 'rent' ? d * totalDevices : 0,
+      monthlyOperatingCost: totalMonthlyDeductions,
       paybackMonths: m,
+      isWarning: m > y,
       chartData
     };
   }, [params]);
@@ -308,12 +334,45 @@ export default function App() {
                           ¥{params.o.toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-[10px] text-zinc-400">含电费、场地租金、维护人工等</p>
                       <input
                         type="range" min="0" max="10000" step="100"
                         value={params.o} onChange={(e) => handleParamChange('o', Number(e.target.value))}
                         className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
                       />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">支付手续费 (%)</label>
+                        <input
+                          type="number" value={params.f} onChange={(e) => handleParamChange('f', Number(e.target.value))}
+                          className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">风险损耗率 (%)</label>
+                        <input
+                          type="number" value={params.l} onChange={(e) => handleParamChange('l', Number(e.target.value))}
+                          className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">设备寿命 (月)</label>
+                        <input
+                          type="number" value={params.y} onChange={(e) => handleParamChange('y', Number(e.target.value))}
+                          className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">综合税率 (%)</label>
+                        <input
+                          type="number" value={params.tax} onChange={(e) => handleParamChange('tax', Number(e.target.value))}
+                          className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -345,12 +404,29 @@ export default function App() {
                           存放设备数量 (n)
                         </label>
                         <span className="text-sm font-mono font-semibold text-zinc-900">
-                          {params.n}台
+                          {params.n}台/柜
                         </span>
                       </div>
                       <input
                         type="range" min="1" max="30" step="1"
                         value={params.n} onChange={(e) => handleParamChange('n', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                          <Box className="w-3 h-3" />
+                          柜体投入数量 (k)
+                        </label>
+                        <span className="text-sm font-mono font-semibold text-zinc-900">
+                          {params.k} 组
+                        </span>
+                      </div>
+                      <input
+                        type="range" min="1" max="100" step="1"
+                        value={params.k} onChange={(e) => handleParamChange('k', Number(e.target.value))}
                         className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
                       />
                     </div>
@@ -361,7 +437,7 @@ export default function App() {
 
             <div className="pt-4">
               <button 
-                onClick={() => setParams({ mode: 'buy', d: 5000, p: 5, t: 4, v: 1500, c: 11000, n: 13, r: 5, u: 60, o: 500 })}
+                onClick={() => setParams({ mode: 'buy', d: 5000, p: 5, t: 4, v: 1500, c: 11000, n: 13, k: 1, r: 5, u: 60, o: 500, f: 1, l: 3, y: 24, tax: 6 })}
                 className="w-full py-3 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center gap-2"
               >
                 <RefreshCcw className="w-3 h-3" />
@@ -373,26 +449,37 @@ export default function App() {
           {/* Main Content - Results */}
           <section className="lg:col-span-8 space-y-8">
             {/* Key Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <motion.div 
                 layout
-                className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm"
+                className={cn(
+                  "bg-white p-6 rounded-2xl border shadow-sm transition-colors",
+                  results.isWarning ? "border-rose-200 bg-rose-50/30" : "border-zinc-100"
+                )}
               >
                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">回本周期 (m)</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-light text-zinc-900">
+                  <span className={cn(
+                    "text-4xl font-light",
+                    results.isWarning ? "text-rose-600" : "text-zinc-900"
+                  )}>
                     {results.paybackMonths === Infinity ? '∞' : results.paybackMonths.toFixed(1)}
                   </span>
                   <span className="text-sm font-medium text-zinc-500">个月</span>
                 </div>
+                {results.isWarning && (
+                  <p className="text-[10px] text-rose-500 font-bold mt-1 uppercase tracking-tighter">
+                    ⚠️ 超过设备预期寿命 ({params.y}个月)
+                  </p>
+                )}
                 <div className="mt-4 h-1 w-full bg-zinc-100 rounded-full overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
-                    animate={{ width: `${Math.min(100, (12 / results.paybackMonths) * 100)}%` }}
+                    animate={{ width: `${Math.min(100, (params.y / results.paybackMonths) * 100)}%` }}
                     className={cn(
                       "h-full rounded-full",
-                      results.paybackMonths <= 12 ? "bg-emerald-500" : 
-                      results.paybackMonths <= 24 ? "bg-amber-500" : "bg-rose-500"
+                      results.paybackMonths <= params.y / 2 ? "bg-emerald-500" : 
+                      results.paybackMonths <= params.y ? "bg-amber-500" : "bg-rose-500"
                     )}
                   />
                 </div>
@@ -408,20 +495,33 @@ export default function App() {
                     ¥{results.totalInitialInvestment.toLocaleString()}
                   </span>
                 </div>
-                <p className="text-xs text-zinc-400 mt-2">含{params.n}台设备及柜体</p>
+                <p className="text-xs text-zinc-400 mt-2">含{params.k}组柜体及{params.n * params.k}台设备</p>
               </motion.div>
 
               <motion.div 
                 layout
                 className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm"
               >
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">预期月营收</p>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">预期月度总营收</p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-light text-zinc-900">
                     ¥{results.monthlyRevenue.toLocaleString()}
                   </span>
                 </div>
-                <p className="text-xs text-zinc-400 mt-2">基于日均{params.t}小时出租</p>
+                <p className="text-xs text-zinc-400 mt-2">基于{params.k}组柜体总体产出</p>
+              </motion.div>
+
+              <motion.div 
+                layout
+                className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm"
+              >
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">预期月度净利润</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-light text-emerald-600">
+                    ¥{Math.round(results.netMonthlyRevenue).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-2">扣除所有成本、风险及税费后</p>
               </motion.div>
             </div>
 
@@ -506,20 +606,17 @@ export default function App() {
                 </h3>
                 <div className="space-y-3 text-sm text-zinc-500 leading-relaxed">
                   <p>
-                    1. <span className="text-zinc-900 font-medium">总初始投入</span> = {params.mode === 'buy' ? '柜体成本 (c) + 单台设备成本 (d) × 设备数量 (n)' : '柜体成本 (c)'}。
+                    1. <span className="text-zinc-900 font-medium">总初始投入</span> = {params.mode === 'buy' ? '(柜体成本 (c) + 单台设备成本 (d) × 每柜台数 (n)) × 柜体数量 (k)' : '柜体成本 (c) × 柜体数量 (k)'}。
                   </p>
                   <p>
-                    2. <span className="text-zinc-900 font-medium">月营收</span> = 定价 (p) × 日均时长 (t) × (设备数量 (n) × 出勤率 (u)) × 30天。
+                    2. <span className="text-zinc-900 font-medium">月营收</span> = 定价 (p) × 日均时长 (t) × (总设备数 (n×k) × 出勤率 (u)) × 30天。
                   </p>
                   <p>
-                    3. <span className="text-zinc-900 font-medium">月运营成本</span> = {params.mode === 'buy' ? '资金利息 (总投入 × r / 12)' : '资金利息 (柜体成本 × r / 12) + 设备月租金 (d × n)'} + 月运营杂费 (o)。
+                    3. <span className="text-zinc-900 font-medium">月运营成本</span> = {params.mode === 'buy' ? '资金利息' : '资金利息 + 总设备月租金'} + (月运营杂费 (o) × k) + 支付手续费 + 风险损耗 + 税费。
                   </p>
                   <p>
                     4. <span className="text-zinc-900 font-medium">回本周期</span> = {params.mode === 'buy' ? '(总投入 - 总残值)' : '总投入'} / (月营收 - 月运营成本)。
                   </p>
-                  <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100 italic text-xs">
-                    注：月运营杂费 (o) 已包含电费、场地租金及维护人工成本。
-                  </div>
                 </div>
               </div>
 
@@ -593,8 +690,16 @@ export default function App() {
                       <span className="font-semibold">¥{params.c.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-zinc-50">
-                      <span className="text-zinc-500">设备数量 (n)</span>
+                      <span className="text-zinc-500">每柜设备数量 (n)</span>
                       <span className="font-semibold">{params.n}台</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">柜体投入数量 (k)</span>
+                      <span className="font-semibold">{params.k}组</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">总设备规模</span>
+                      <span className="font-semibold">{params.n * params.k}台</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">年化资金成本 (r)</span>
@@ -629,7 +734,7 @@ export default function App() {
                     )}
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">有效营收设备数</span>
-                      <span className="font-semibold text-zinc-900">{(params.n * params.u / 100).toFixed(1)}台</span>
+                      <span className="font-semibold text-zinc-900">{(params.n * params.k * params.u / 100).toFixed(1)}台</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">月营收 (Gross)</span>
@@ -649,7 +754,19 @@ export default function App() {
                     )}
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">月运营杂费 (o)</span>
-                      <span className="font-semibold text-rose-500">-¥{params.o.toLocaleString()}</span>
+                      <span className="font-semibold text-rose-500">-¥{(params.o * params.k).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">支付手续费 ({params.f}%)</span>
+                      <span className="font-semibold text-rose-500">-¥{results.paymentFees.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">风险损耗预提 ({params.l}%)</span>
+                      <span className="font-semibold text-rose-500">-¥{results.riskLoss.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">预估月综合税费 ({params.tax}%)</span>
+                      <span className="font-semibold text-rose-500">-¥{results.monthlyTax.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
                     
                     <div className="flex justify-between py-1 border-b border-zinc-50 bg-zinc-50 px-2 -mx-2 rounded">
