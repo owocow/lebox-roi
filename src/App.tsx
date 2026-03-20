@@ -486,6 +486,90 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Data Summary Section */}
+            <div className="bg-white p-8 rounded-3xl border border-zinc-100 shadow-sm space-y-6">
+              <div className="flex items-center gap-2 pb-4 border-b border-zinc-100">
+                <Calculator className="w-5 h-5 text-zinc-400" />
+                <h2 className="text-lg font-medium">数据汇总清单 (Data Summary)</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                {/* Input Parameters Summary */}
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-l-2 border-zinc-900 pl-2">输入参数 (Input Parameters)</h3>
+                  <div className="space-y-2 font-mono text-sm">
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">单台设备成本 (d)</span>
+                      <span className="font-semibold">¥{params.d.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">租赁定价 (p)</span>
+                      <span className="font-semibold">¥{params.p}/小时</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">日均出租时长 (t)</span>
+                      <span className="font-semibold">{params.t}小时</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">设备出勤率 (u)</span>
+                      <span className="font-semibold">{params.u}%</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">期末残值 (v)</span>
+                      <span className="font-semibold">¥{params.v.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">柜体成本 (c)</span>
+                      <span className="font-semibold">¥{params.c.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">设备数量 (n)</span>
+                      <span className="font-semibold">{params.n}台</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">年化资金成本 (r)</span>
+                      <span className="font-semibold">{params.r}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Calculated Results Summary */}
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-l-2 border-zinc-900 pl-2">测算结果 (Calculated Results)</h3>
+                  <div className="space-y-2 font-mono text-sm">
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">总初始投入</span>
+                      <span className="font-semibold text-zinc-900">¥{results.totalInitialInvestment.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">有效营收设备数</span>
+                      <span className="font-semibold text-zinc-900">{(params.n * params.u / 100).toFixed(1)}台</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">月营收 (Gross)</span>
+                      <span className="font-semibold text-zinc-900">¥{results.monthlyRevenue.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">月资金利息支出</span>
+                      <span className="font-semibold text-rose-500">-¥{results.monthlyInterestCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">净月营收 (Net)</span>
+                      <span className="font-semibold text-emerald-600">¥{(results.monthlyRevenue - results.monthlyInterestCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">回本周期 (Payback)</span>
+                      <span className="font-semibold text-zinc-900">{results.paybackMonths === Infinity ? '∞' : results.paybackMonths.toFixed(1)}个月</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">年化收益率 (ROI)</span>
+                      <span className="font-semibold text-zinc-900">{results.paybackMonths > 0 ? ((12 / results.paybackMonths) * 100).toFixed(1) : 0}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </section>
         </main>
 
