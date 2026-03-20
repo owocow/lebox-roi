@@ -1,0 +1,5 @@
+{
+  "name": "3C租赁ROI测算工具",
+  "description": "一个专业的3C数码设备租赁回本周期测算模型，支持多维度参数调整与可视化分析。",
+  "requestFramePermissions": []
+}
