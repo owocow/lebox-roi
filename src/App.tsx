@@ -37,7 +37,8 @@ function cn(...inputs: ClassValue[]) {
 }
 
 interface ROIParams {
-  d: number; // 设备单台成本
+  mode: 'buy' | 'rent';
+  d: number; // 设备单台成本 (buy) 或 每月租金 (rent)
   p: number; // 定价 元/小时
   t: number; // 每天预期出租时长
   v: number; // 期末残值 (单台)
@@ -45,10 +46,12 @@ interface ROIParams {
   n: number; // 每个柜体可存放设备数量
   r: number; // 资金成本 (年化 %)
   u: number; // 设备出勤率 (%)
+  o: number; // 月运营杂费 (电费、场地、人工)
 }
 
 export default function App() {
   const [params, setParams] = useState<ROIParams>({
+    mode: 'buy',
     d: 5000,
     p: 5,
     t: 4,
@@ -56,24 +59,37 @@ export default function App() {
     c: 11000,
     n: 13,
     r: 5,
-    u: 60
+    u: 60,
+    o: 500
   });
 
   const results = useMemo(() => {
-    const { d, p, t, v, c, n, r, u } = params;
-    
-    const totalDeviceCost = d * n;
-    const totalInitialInvestment = c + totalDeviceCost;
-    const totalResidualValue = v * n;
-    const netInvestment = totalInitialInvestment - totalResidualValue;
+    const { mode, d, p, t, v, c, n, r, u, o } = params;
     
     const activeDevices = n * (u / 100);
-    const dailyRevenue = p * t * activeDevices;
-    const monthlyRevenue = dailyRevenue * 30;
+    const monthlyRevenue = p * t * activeDevices * 30;
+
+    let totalInitialInvestment = 0;
+    let totalResidualValue = 0;
+    let monthlyOperatingCost = 0;
+    let monthlyInterestCost = 0;
+
+    if (mode === 'buy') {
+      const totalDeviceCost = d * n;
+      totalInitialInvestment = c + totalDeviceCost;
+      totalResidualValue = v * n;
+      monthlyInterestCost = totalInitialInvestment * (r / 100) / 12;
+      monthlyOperatingCost = monthlyInterestCost + o;
+    } else {
+      totalInitialInvestment = c;
+      totalResidualValue = 0;
+      monthlyInterestCost = c * (r / 100) / 12;
+      const monthlyDeviceRent = d * n;
+      monthlyOperatingCost = monthlyInterestCost + monthlyDeviceRent + o;
+    }
     
-    // Monthly cost of capital
-    const monthlyInterestCost = totalInitialInvestment * (r / 100) / 12;
-    const netMonthlyRevenue = monthlyRevenue - monthlyInterestCost;
+    const netInvestment = totalInitialInvestment - totalResidualValue;
+    const netMonthlyRevenue = monthlyRevenue - monthlyOperatingCost;
     
     // Payback period in months
     const m = netMonthlyRevenue > 0 ? netInvestment / netMonthlyRevenue : Infinity;
@@ -81,8 +97,8 @@ export default function App() {
     // Generate chart data for 24 months
     const chartData = Array.from({ length: 25 }, (_, i) => {
       const revenue = monthlyRevenue * i;
-      const interest = monthlyInterestCost * i;
-      const netProfit = revenue - interest - (totalInitialInvestment - (i >= m ? totalResidualValue : 0));
+      const cost = monthlyOperatingCost * i;
+      const netProfit = revenue - cost - (totalInitialInvestment - (i >= m ? totalResidualValue : 0));
       return {
         month: i,
         revenue: Math.round(revenue),
@@ -93,8 +109,12 @@ export default function App() {
 
     return {
       totalInitialInvestment,
+      totalDeviceCost: mode === 'buy' ? d * n : 0,
+      totalResidualValue,
       monthlyRevenue,
       monthlyInterestCost,
+      monthlyDeviceRent: mode === 'rent' ? d * n : 0,
+      monthlyOperatingCost,
       paybackMonths: m,
       chartData
     };
@@ -108,15 +128,39 @@ export default function App() {
     <div className="min-h-screen bg-[#F5F5F3] text-zinc-900 font-sans p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-zinc-200 pb-6">
-          <div>
-            <div className="flex items-center gap-2 text-zinc-500 mb-2">
-              <Calculator className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-[0.2em]">Investment Analysis</span>
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-zinc-200 pb-6">
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2 text-zinc-500 mb-2">
+                <Calculator className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-[0.2em]">Investment Analysis</span>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-light tracking-tight text-zinc-900">
+                ROI <span className="italic font-serif">测算模型</span>
+              </h1>
             </div>
-            <h1 className="text-4xl md:text-5xl font-light tracking-tight text-zinc-900">
-              ROI <span className="italic font-serif">测算模型</span>
-            </h1>
+            
+            {/* Mode Switcher */}
+            <div className="inline-flex p-1 bg-zinc-100 rounded-xl border border-zinc-200">
+              <button
+                onClick={() => setParams(prev => ({ ...prev, mode: 'buy', d: 5000, v: 1500 }))}
+                className={cn(
+                  "px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all",
+                  params.mode === 'buy' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-400 hover:text-zinc-600"
+                )}
+              >
+                购买设备
+              </button>
+              <button
+                onClick={() => setParams(prev => ({ ...prev, mode: 'rent', d: 300, v: 0 }))}
+                className={cn(
+                  "px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all",
+                  params.mode === 'rent' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-400 hover:text-zinc-600"
+                )}
+              >
+                租赁设备
+              </button>
+            </div>
           </div>
           <div className="text-right">
             <p className="text-xs text-zinc-400 uppercase tracking-widest mb-1">Last Updated</p>
@@ -141,14 +185,17 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
                           <Smartphone className="w-3 h-3" />
-                          单台设备成本 (d)
+                          {params.mode === 'buy' ? '单台设备成本 (d)' : '单台月租金 (d)'}
                         </label>
                         <span className="text-sm font-mono font-semibold text-zinc-900">
                           ¥{params.d.toLocaleString()}
                         </span>
                       </div>
                       <input
-                        type="range" min="500" max="15000" step="100"
+                        type="range" 
+                        min={params.mode === 'buy' ? "500" : "50"} 
+                        max={params.mode === 'buy' ? "15000" : "2000"} 
+                        step={params.mode === 'buy' ? "100" : "10"}
                         value={params.d} onChange={(e) => handleParamChange('d', Number(e.target.value))}
                         className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
                       />
@@ -165,7 +212,7 @@ export default function App() {
                         </span>
                       </div>
                       <input
-                        type="range" min="1" max="50" step="0.5"
+                        type="range" min="1" max="100" step="0.5"
                         value={params.p} onChange={(e) => handleParamChange('p', Number(e.target.value))}
                         className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
                       />
@@ -210,27 +257,29 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
-                          <TrendingUp className="w-3 h-3" />
-                          期末残值 (v)
-                        </label>
-                        <span className="text-sm font-mono font-semibold text-zinc-900">
-                          ¥{params.v.toLocaleString()}
-                        </span>
+                    {params.mode === 'buy' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                            <TrendingUp className="w-3 h-3" />
+                            期末残值 (v)
+                          </label>
+                          <span className="text-sm font-mono font-semibold text-zinc-900">
+                            ¥{params.v.toLocaleString()}
+                          </span>
+                        </div>
+                        <input
+                          type="range" min="0" max={params.d} step="100"
+                          value={params.v} onChange={(e) => handleParamChange('v', Number(e.target.value))}
+                          className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                        />
                       </div>
-                      <input
-                        type="range" min="0" max={params.d} step="100"
-                        value={params.v} onChange={(e) => handleParamChange('v', Number(e.target.value))}
-                        className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
-                      />
-                    </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="p-4 bg-zinc-50 rounded-xl space-y-4">
-                  <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">财务参数</h3>
+                  <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">财务与运营参数</h3>
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -245,6 +294,24 @@ export default function App() {
                       <input
                         type="range" min="0" max="20" step="0.1"
                         value={params.r} onChange={(e) => handleParamChange('r', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                          <DollarSign className="w-3 h-3" />
+                          月运营杂费 (o)
+                        </label>
+                        <span className="text-sm font-mono font-semibold text-zinc-900">
+                          ¥{params.o.toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-400">含电费、场地租金、维护人工等</p>
+                      <input
+                        type="range" min="0" max="10000" step="100"
+                        value={params.o} onChange={(e) => handleParamChange('o', Number(e.target.value))}
                         className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
                       />
                     </div>
@@ -294,7 +361,7 @@ export default function App() {
 
             <div className="pt-4">
               <button 
-                onClick={() => setParams({ d: 5000, p: 5, t: 4, v: 1500, c: 11000, n: 13, r: 5, u: 60 })}
+                onClick={() => setParams({ mode: 'buy', d: 5000, p: 5, t: 4, v: 1500, c: 11000, n: 13, r: 5, u: 60, o: 500 })}
                 className="w-full py-3 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center gap-2"
               >
                 <RefreshCcw className="w-3 h-3" />
@@ -439,19 +506,19 @@ export default function App() {
                 </h3>
                 <div className="space-y-3 text-sm text-zinc-500 leading-relaxed">
                   <p>
-                    1. <span className="text-zinc-900 font-medium">总初始投入</span> = 柜体成本 (c) + 单台设备成本 (d) × 设备数量 (n)。
+                    1. <span className="text-zinc-900 font-medium">总初始投入</span> = {params.mode === 'buy' ? '柜体成本 (c) + 单台设备成本 (d) × 设备数量 (n)' : '柜体成本 (c)'}。
                   </p>
                   <p>
                     2. <span className="text-zinc-900 font-medium">月营收</span> = 定价 (p) × 日均时长 (t) × (设备数量 (n) × 出勤率 (u)) × 30天。
                   </p>
                   <p>
-                    3. <span className="text-zinc-900 font-medium">资金利息</span> = 总投入 × 年化利率 (r) / 12个月。
+                    3. <span className="text-zinc-900 font-medium">月运营成本</span> = {params.mode === 'buy' ? '资金利息 (总投入 × r / 12)' : '资金利息 (柜体成本 × r / 12) + 设备月租金 (d × n)'} + 月运营杂费 (o)。
                   </p>
                   <p>
-                    4. <span className="text-zinc-900 font-medium">回本周期</span> = (总投入 - 总残值) / (月营收 - 资金利息)。
+                    4. <span className="text-zinc-900 font-medium">回本周期</span> = {params.mode === 'buy' ? '(总投入 - 总残值)' : '总投入'} / (月营收 - 月运营成本)。
                   </p>
                   <div className="p-3 bg-zinc-50 rounded-lg border border-zinc-100 italic text-xs">
-                    注：本模型暂未计入电费、场地租金及维护人工成本。
+                    注：月运营杂费 (o) 已包含电费、场地租金及维护人工成本。
                   </div>
                 </div>
               </div>
@@ -500,7 +567,7 @@ export default function App() {
                   <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-l-2 border-zinc-900 pl-2">输入参数 (Input Parameters)</h3>
                   <div className="space-y-2 font-mono text-sm">
                     <div className="flex justify-between py-1 border-b border-zinc-50">
-                      <span className="text-zinc-500">单台设备成本 (d)</span>
+                      <span className="text-zinc-500">{params.mode === 'buy' ? '单台设备成本 (d)' : '单台月租金 (d)'}</span>
                       <span className="font-semibold">¥{params.d.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-zinc-50">
@@ -515,10 +582,12 @@ export default function App() {
                       <span className="text-zinc-500">设备出勤率 (u)</span>
                       <span className="font-semibold">{params.u}%</span>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-zinc-50">
-                      <span className="text-zinc-500">期末残值 (v)</span>
-                      <span className="font-semibold">¥{params.v.toLocaleString()}</span>
-                    </div>
+                    {params.mode === 'buy' && (
+                      <div className="flex justify-between py-1 border-b border-zinc-50">
+                        <span className="text-zinc-500">期末残值 (v)</span>
+                        <span className="font-semibold">¥{params.v.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">柜体成本 (c)</span>
                       <span className="font-semibold">¥{params.c.toLocaleString()}</span>
@@ -531,6 +600,10 @@ export default function App() {
                       <span className="text-zinc-500">年化资金成本 (r)</span>
                       <span className="font-semibold">{params.r}%</span>
                     </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">月运营杂费 (o)</span>
+                      <span className="font-semibold">¥{params.o.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -542,6 +615,18 @@ export default function App() {
                       <span className="text-zinc-500">总初始投入</span>
                       <span className="font-semibold text-zinc-900">¥{results.totalInitialInvestment.toLocaleString()}</span>
                     </div>
+                    {params.mode === 'buy' && (
+                      <>
+                        <div className="flex justify-between py-1 border-b border-zinc-50">
+                          <span className="text-zinc-500">设备总采购价</span>
+                          <span className="font-semibold text-zinc-900">¥{results.totalDeviceCost.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-zinc-50">
+                          <span className="text-zinc-500">期末总残值</span>
+                          <span className="font-semibold text-emerald-600">+¥{results.totalResidualValue.toLocaleString()}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">有效营收设备数</span>
                       <span className="font-semibold text-zinc-900">{(params.n * params.u / 100).toFixed(1)}台</span>
@@ -550,13 +635,26 @@ export default function App() {
                       <span className="text-zinc-500">月营收 (Gross)</span>
                       <span className="font-semibold text-zinc-900">¥{results.monthlyRevenue.toLocaleString()}</span>
                     </div>
+                    
+                    {/* Cost Breakdown */}
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">月资金利息支出</span>
                       <span className="font-semibold text-rose-500">-¥{results.monthlyInterestCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
+                    {params.mode === 'rent' && (
+                      <div className="flex justify-between py-1 border-b border-zinc-50">
+                        <span className="text-zinc-500">设备总月租金</span>
+                        <span className="font-semibold text-rose-500">-¥{results.monthlyDeviceRent.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-1 border-b border-zinc-50">
-                      <span className="text-zinc-500">净月营收 (Net)</span>
-                      <span className="font-semibold text-emerald-600">¥{(results.monthlyRevenue - results.monthlyInterestCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                      <span className="text-zinc-500">月运营杂费 (o)</span>
+                      <span className="font-semibold text-rose-500">-¥{params.o.toLocaleString()}</span>
+                    </div>
+                    
+                    <div className="flex justify-between py-1 border-b border-zinc-50 bg-zinc-50 px-2 -mx-2 rounded">
+                      <span className="text-zinc-900 font-bold">净月营收 (Net)</span>
+                      <span className="font-bold text-emerald-600">¥{(results.monthlyRevenue - results.monthlyOperatingCost).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">回本周期 (Payback)</span>
