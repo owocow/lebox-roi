@@ -54,24 +54,26 @@ interface ROIParams {
   tax: number; // 综合税率 (%)
 }
 
+const DEFAULT_PARAMS: ROIParams = {
+  mode: 'buy',
+  d: 3100,
+  p: 5,
+  t: 6,
+  v: 1200,
+  c: 10500,
+  n: 13,
+  k: 1,
+  r: 5,
+  u: 60,
+  o: 500,
+  f: 0.6,
+  l: 3,
+  y: 24,
+  tax: 6
+};
+
 export default function App() {
-  const [params, setParams] = useState<ROIParams>({
-    mode: 'buy',
-    d: 5000,
-    p: 5,
-    t: 4,
-    v: 1500,
-    c: 11000,
-    n: 13,
-    k: 1,
-    r: 5,
-    u: 60,
-    o: 500,
-    f: 1,
-    l: 3,
-    y: 24,
-    tax: 6
-  });
+  const [params, setParams] = useState<ROIParams>(DEFAULT_PARAMS);
 
   const results = useMemo(() => {
     const { mode, d, p, t, v, c, n, k, r, u, o, f, l, y, tax } = params;
@@ -162,14 +164,14 @@ export default function App() {
                 <span className="text-xs font-bold uppercase tracking-[0.2em]">Investment Analysis</span>
               </div>
               <h1 className="text-4xl md:text-5xl font-light tracking-tight text-zinc-900">
-                ROI <span className="italic font-serif">测算模型</span>
+                乐盒柜投资回报测算模型
               </h1>
             </div>
             
             {/* Mode Switcher */}
             <div className="inline-flex p-1 bg-zinc-100 rounded-xl border border-zinc-200">
               <button
-                onClick={() => setParams(prev => ({ ...prev, mode: 'buy', d: 5000, v: 1500 }))}
+                onClick={() => setParams(prev => ({ ...prev, mode: 'buy', d: DEFAULT_PARAMS.d, v: DEFAULT_PARAMS.v }))}
                 className={cn(
                   "px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all",
                   params.mode === 'buy' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-400 hover:text-zinc-600"
@@ -178,7 +180,7 @@ export default function App() {
                 购买设备
               </button>
               <button
-                onClick={() => setParams(prev => ({ ...prev, mode: 'rent', d: 300, v: 0 }))}
+                onClick={() => setParams(prev => ({ ...prev, mode: 'rent', d: 200, v: 0 }))}
                 className={cn(
                   "px-6 py-2 text-xs font-bold uppercase tracking-widest rounded-lg transition-all",
                   params.mode === 'rent' ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-400 hover:text-zinc-600"
@@ -187,10 +189,6 @@ export default function App() {
                 租赁设备
               </button>
             </div>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-zinc-400 uppercase tracking-widest mb-1">Last Updated</p>
-            <p className="text-sm font-mono font-medium">2026.03.20</p>
           </div>
         </header>
 
@@ -437,7 +435,7 @@ export default function App() {
 
             <div className="pt-4">
               <button 
-                onClick={() => setParams({ mode: 'buy', d: 5000, p: 5, t: 4, v: 1500, c: 11000, n: 13, k: 1, r: 5, u: 60, o: 500, f: 1, l: 3, y: 24, tax: 6 })}
+                onClick={() => setParams(DEFAULT_PARAMS)}
                 className="w-full py-3 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center gap-2"
               >
                 <RefreshCcw className="w-3 h-3" />
@@ -789,9 +787,12 @@ export default function App() {
         </main>
 
         {/* Footer */}
-        <footer className="pt-8 border-t border-zinc-200 text-center">
-          <p className="text-[10px] text-zinc-400 uppercase tracking-[0.3em]">
-            &copy; 2026 3C Rental ROI Analysis Tool • Precision Modeling
+        <footer className="pt-12 pb-8 border-t border-zinc-100 text-center space-y-2">
+          <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-[0.3em]">
+            VERSION 1.0.0
+          </p>
+          <p className="text-[10px] text-zinc-300 uppercase tracking-[0.2em]">
+            &copy; 2026 乐盒柜投资回报测算模型 • Precision Modeling
           </p>
         </footer>
       </div>
