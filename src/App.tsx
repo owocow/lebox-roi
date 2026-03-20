@@ -163,7 +163,7 @@ export default function App() {
                 <Calculator className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase tracking-[0.2em]">Investment Analysis</span>
               </div>
-              <h1 className="text-4xl md:text-5xl font-light tracking-tight text-zinc-900">
+              <h1 className="text-3xl md:text-4xl font-light tracking-tight text-zinc-900">
                 乐盒柜投资回报测算模型
               </h1>
             </div>
