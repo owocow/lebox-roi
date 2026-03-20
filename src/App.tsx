@@ -44,6 +44,7 @@ interface ROIParams {
   c: number; // 柜体成本
   n: number; // 每个柜体可存放设备数量
   r: number; // 资金成本 (年化 %)
+  u: number; // 设备出勤率 (%)
 }
 
 export default function App() {
@@ -54,18 +55,20 @@ export default function App() {
     v: 1500,
     c: 11000,
     n: 13,
-    r: 5
+    r: 5,
+    u: 60
   });
 
   const results = useMemo(() => {
-    const { d, p, t, v, c, n, r } = params;
+    const { d, p, t, v, c, n, r, u } = params;
     
     const totalDeviceCost = d * n;
     const totalInitialInvestment = c + totalDeviceCost;
     const totalResidualValue = v * n;
     const netInvestment = totalInitialInvestment - totalResidualValue;
     
-    const dailyRevenue = p * t * n;
+    const activeDevices = n * (u / 100);
+    const dailyRevenue = p * t * activeDevices;
     const monthlyRevenue = dailyRevenue * 30;
     
     // Monthly cost of capital
@@ -189,6 +192,28 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
                           <TrendingUp className="w-3 h-3" />
+                          设备出勤率 (u)
+                        </label>
+                        <div className="text-right">
+                          <span className="text-sm font-mono font-semibold text-zinc-900 block">
+                            {params.u}%
+                          </span>
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            约 {(params.n * params.u / 100).toFixed(1)} 台/日
+                          </span>
+                        </div>
+                      </div>
+                      <input
+                        type="range" min="0" max="100" step="1"
+                        value={params.u} onChange={(e) => handleParamChange('u', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                          <TrendingUp className="w-3 h-3" />
                           期末残值 (v)
                         </label>
                         <span className="text-sm font-mono font-semibold text-zinc-900">
@@ -269,7 +294,7 @@ export default function App() {
 
             <div className="pt-4">
               <button 
-                onClick={() => setParams({ d: 5000, p: 5, t: 4, v: 1500, c: 11000, n: 13, r: 5 })}
+                onClick={() => setParams({ d: 5000, p: 5, t: 4, v: 1500, c: 11000, n: 13, r: 5, u: 60 })}
                 className="w-full py-3 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-zinc-900 transition-colors flex items-center justify-center gap-2"
               >
                 <RefreshCcw className="w-3 h-3" />
@@ -417,7 +442,7 @@ export default function App() {
                     1. <span className="text-zinc-900 font-medium">总初始投入</span> = 柜体成本 (c) + 单台设备成本 (d) × 设备数量 (n)。
                   </p>
                   <p>
-                    2. <span className="text-zinc-900 font-medium">月营收</span> = 定价 (p) × 日均时长 (t) × 设备数量 (n) × 30天。
+                    2. <span className="text-zinc-900 font-medium">月营收</span> = 定价 (p) × 日均时长 (t) × (设备数量 (n) × 出勤率 (u)) × 30天。
                   </p>
                   <p>
                     3. <span className="text-zinc-900 font-medium">资金利息</span> = 总投入 × 年化利率 (r) / 12个月。
