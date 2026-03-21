@@ -14,7 +14,8 @@ import {
   DollarSign,
   Clock,
   Smartphone,
-  Box
+  Box,
+  MapPin
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -49,6 +50,7 @@ interface ROIParams {
   u: number; // 设备出勤率 (%)
   o: number; // 月运营杂费 (电费、场地、人工)
   f: number; // 支付手续费率 (%)
+  s: number; // 场地使用费率 (%)
   l: number; // 风险损耗率 (%)
   y: number; // 预期设备寿命 (月)
   tax: number; // 综合税率 (%)
@@ -67,6 +69,7 @@ const DEFAULT_PARAMS: ROIParams = {
   u: 60,
   o: 500,
   f: 0.6,
+  s: 10,
   l: 3,
   y: 24,
   tax: 6
@@ -76,7 +79,7 @@ export default function App() {
   const [params, setParams] = useState<ROIParams>(DEFAULT_PARAMS);
 
   const results = useMemo(() => {
-    const { mode, d, p, t, v, c, n, k, r, u, o, f, l, y, tax } = params;
+    const { mode, d, p, t, v, c, n, k, r, u, o, f, s, l, y, tax } = params;
     
     const totalDevices = n * k;
     const activeDevices = totalDevices * (u / 100);
@@ -84,6 +87,7 @@ export default function App() {
 
     // Advanced Deductions
     const paymentFees = grossMonthlyRevenue * (f / 100);
+    const venueFees = grossMonthlyRevenue * (s / 100);
     const riskLoss = grossMonthlyRevenue * (l / 100);
     
     let totalInitialInvestment = 0;
@@ -106,10 +110,10 @@ export default function App() {
     }
 
     // Tax calculation (simplified: on revenue after direct operating costs)
-    const taxableIncome = Math.max(0, grossMonthlyRevenue - paymentFees - riskLoss - monthlyOperatingCost);
+    const taxableIncome = Math.max(0, grossMonthlyRevenue - paymentFees - venueFees - riskLoss - monthlyOperatingCost);
     const monthlyTax = taxableIncome * (tax / 100);
     
-    const totalMonthlyDeductions = paymentFees + riskLoss + monthlyOperatingCost + monthlyTax;
+    const totalMonthlyDeductions = paymentFees + venueFees + riskLoss + monthlyOperatingCost + monthlyTax;
     const netMonthlyRevenue = grossMonthlyRevenue - totalMonthlyDeductions;
     
     const netInvestment = totalInitialInvestment - totalResidualValue;
@@ -137,6 +141,7 @@ export default function App() {
       monthlyRevenue: grossMonthlyRevenue,
       netMonthlyRevenue,
       paymentFees,
+      venueFees,
       riskLoss,
       monthlyTax,
       monthlyInterestCost,
@@ -339,7 +344,7 @@ export default function App() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">支付手续费 (%)</label>
                         <input
@@ -347,6 +352,26 @@ export default function App() {
                           className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
                         />
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-2">
+                          <MapPin className="w-3 h-3" />
+                          场地使用费 (s)
+                        </label>
+                        <span className="text-sm font-mono font-semibold text-zinc-900">
+                          {params.s}%
+                        </span>
+                      </div>
+                      <input
+                        type="range" min="0" max="100" step="1"
+                        value={params.s} onChange={(e) => handleParamChange('s', Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-zinc-900"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">风险损耗率 (%)</label>
                         <input
@@ -354,20 +379,20 @@ export default function App() {
                           className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
                         />
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">设备寿命 (月)</label>
-                        <input
-                          type="number" value={params.y} onChange={(e) => handleParamChange('y', Number(e.target.value))}
-                          className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
-                        />
-                      </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">综合税率 (%)</label>
                         <input
                           type="number" value={params.tax} onChange={(e) => handleParamChange('tax', Number(e.target.value))}
+                          className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">设备寿命 (月)</label>
+                        <input
+                          type="number" value={params.y} onChange={(e) => handleParamChange('y', Number(e.target.value))}
                           className="w-full bg-white border border-zinc-200 rounded-lg px-3 py-2 text-sm font-mono"
                         />
                       </div>
@@ -610,7 +635,7 @@ export default function App() {
                     2. <span className="text-zinc-900 font-medium">月营收</span> = 定价 (p) × 日均时长 (t) × (总设备数 (n×k) × 出勤率 (u)) × 30天。
                   </p>
                   <p>
-                    3. <span className="text-zinc-900 font-medium">月运营成本</span> = {params.mode === 'buy' ? '资金利息' : '资金利息 + 总设备月租金'} + (月运营杂费 (o) × k) + 支付手续费 + 风险损耗 + 税费。
+                    3. <span className="text-zinc-900 font-medium">月运营成本</span> = {params.mode === 'buy' ? '资金利息' : '资金利息 + 总设备月租金'} + (月运营杂费 (o) × k) + 支付手续费 + 场地使用费 (s) + 风险损耗 + 税费。
                   </p>
                   <p>
                     4. <span className="text-zinc-900 font-medium">回本周期</span> = {params.mode === 'buy' ? '(总投入 - 总残值)' : '总投入'} / (月营收 - 月运营成本)。
@@ -707,6 +732,10 @@ export default function App() {
                       <span className="text-zinc-500">月运营杂费 (o)</span>
                       <span className="font-semibold">¥{params.o.toLocaleString()}</span>
                     </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">场地使用费率 (s)</span>
+                      <span className="font-semibold">{params.s}%</span>
+                    </div>
                   </div>
                 </div>
 
@@ -757,6 +786,10 @@ export default function App() {
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">支付手续费 ({params.f}%)</span>
                       <span className="font-semibold text-rose-500">-¥{results.paymentFees.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-zinc-50">
+                      <span className="text-zinc-500">场地使用费 ({params.s}%)</span>
+                      <span className="font-semibold text-rose-500">-¥{results.venueFees.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-zinc-50">
                       <span className="text-zinc-500">风险损耗预提 ({params.l}%)</span>
